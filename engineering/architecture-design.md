@@ -317,40 +317,120 @@ class StatisticalAnalyzer:
 
 ### 5.1 MVPスコープ
 
-| 機能 | 優先度 | 実現可能性 | 備考 |
-|------|--------|------------|------|
-| テキスト判定 (日本語/英語) | 必須 | 高 | 既存モデル + ファインチューニングで実現可能 |
-| 判定結果の可視化 | 必須 | 高 | フロントエンドで実装、パープレキシティのヒートマップ等 |
-| ユーザー認証 | 必須 | 高 | NextAuth.js / OAuth 2.0 で実装 |
-| 判定履歴の保存 | 必須 | 高 | DB保存、シンプルなCRUD |
-| API提供 (REST) | 必須 | 高 | FastAPI の自動ドキュメントを活用 |
-| 画像判定 (基本) | 望ましい | 中 | メタデータ解析 + 基本的CNN判定は実現可能。精度向上には追加学習が必要 |
-| バッチ処理 | 望ましい | 高 | Celery で実装可能 |
-| フィードバック機能 | 望ましい | 高 | ユーザーの正誤報告を収集し、モデル改善に活用 |
-| コード判定 | 将来 | 中 | ASTベースの分析は可能だが、精度が課題 |
-| リアルタイム判定 | 将来 | 中 | WebSocket対応、入力中の逐次判定 |
+| 機能 | 優先度 | 実現可能性 | 技術的詳細 |
+|------|--------|------------|------------|
+| テキスト判定 (日本語/英語) | P0: 必須 | **高** | 既存モデル(DeBERTa等) + 日本語データでのファインチューニングで実現可能。英語は既存の公開モデルを初期利用し、日本語は独自学習が必要 |
+| 段階的結果返却 | P0: 必須 | **高** | 統計分析(即時) → 軽量ML(数秒) → 高精度ML(非同期) の3段階。SSEで結果をプッシュ |
+| 判定根拠の可視化 | P0: 必須 | **高** | 文単位のAI生成確率ヒートマップ、パープレキシティの折れ線グラフ、寄与度の高い特徴量の表示 |
+| ユーザー認証 | P0: 必須 | **高** | NextAuth.js v5 / OAuth 2.0 (Google, GitHub)。メールアドレス認証も対応 |
+| 判定履歴の保存・管理 | P0: 必須 | **高** | PostgreSQLに保存。ユーザーごとの履歴一覧、検索、エクスポート(CSV) |
+| REST API提供 | P0: 必須 | **高** | FastAPI の自動OpenAPIドキュメントを活用。APIキー認証。レート制限付き |
+| C2PAメタデータ検出 | P1: 望ましい | **高** | `c2pa-python`ライブラリで実装可能。テキスト・画像両方に対応 |
+| 画像判定 (基本) | P1: 望ましい | **中** | メタデータ解析は容易。CNN分類は精度を担保するために追加学習データが必要 |
+| バッチ処理 | P1: 望ましい | **高** | Celery で実装可能。複数テキストの一括判定、結果のCSVダウンロード |
+| フィードバック機能 | P1: 望ましい | **高** | 「正しい/間違い」の二択ボタン。収集データをモデル改善に活用（Active Learning） |
+| コード判定 | P2: 将来 | **中** | ASTベースの分析は可能だが、精度の保証が困難。研究開発フェーズが必要 |
+| リアルタイム判定 | P2: 将来 | **中** | SSE対応で入力中の逐次判定。デバウンス処理が必要 |
+| 多言語対応 | P2: 将来 | **中** | 中国語・韓国語等。各言語のNLPリソース確保が課題 |
 
 ### 5.2 MVP技術要件
 
 ```
-MVP構成:
-- Next.js フロントエンド (Vercel にデプロイ可能)
-- FastAPI バックエンド (Docker コンテナ)
-- PostgreSQL (マネージドDB)
-- Redis (キャッシュ + セッション)
-- Hugging Face モデル (GPU推論サーバー)
+MVP構成（最小限で動作する構成）:
+
+[Vercel]
+  └── Next.js フロントエンド
+
+[AWS]
+  ├── ECS Fargate
+  │   └── FastAPI バックエンドコンテナ
+  │
+  ├── RDS (PostgreSQL 16)
+  │   └── ユーザー情報、判定履歴
+  │
+  ├── ElastiCache (Redis 7)
+  │   └── キャッシュ、セッション、Celeryブローカー
+  │
+  ├── EC2 g5.xlarge (or Inferentia2)
+  │   └── ML推論サーバー (ONNX Runtime)
+  │
+  └── S3
+      └── MLモデルファイル、アップロード一時保存
+
+推論サーバーの構成:
+  - 軽量モデル (DistilBERT): CPU推論可能 → Fargateコンテナ内で実行
+  - 重量モデル (DeBERTa-v3-large): GPU必須 → 専用GPU EC2インスタンス
+  - 統計分析: CPU処理 → Fargateコンテナ内で実行
 ```
 
 ### 5.3 MVP開発工数見積もり
 
-| フェーズ | 期間 (目安) | 内容 |
-|----------|-------------|------|
-| Phase 1: 基盤構築 | 2週間 | プロジェクト雛形、認証、DB設計、CI/CD |
-| Phase 2: 判定エンジン | 3週間 | テキスト判定の実装、モデル選定・チューニング |
-| Phase 3: フロントエンド | 2週間 | UI実装、結果可視化 |
-| Phase 4: 統合テスト | 1週間 | E2Eテスト、パフォーマンステスト |
-| Phase 5: デプロイ | 1週間 | 本番環境構築、監視設定 |
-| **合計** | **約9週間** | |
+| フェーズ | 期間 (目安) | 内容 | 成果物 |
+|----------|-------------|------|--------|
+| Phase 0: PoC | 1週間 | テキスト判定エンジンの概念実証。公開モデルを使い、日本語テキストでの精度を検証 | PoC結果レポート、Go/No-Go判断 |
+| Phase 1: 基盤構築 | 2週間 | プロジェクト雛形(monorepo構成)、認証、DB設計(マイグレーション)、CI/CD(GitHub Actions) | 動作するプロジェクト骨格、dev環境 |
+| Phase 2: 判定エンジン | 3週間 | テキスト判定の実装（統計分析+ML分類器+透かし検出）、日本語データ収集・ファインチューニング | 判定APIエンドポイント、学習済みモデル |
+| Phase 3: フロントエンド | 2週間 | UI実装（入力画面、結果表示画面、履歴画面）、結果可視化（ヒートマップ、チャート） | ユーザー向けWebアプリ |
+| Phase 4: 統合・テスト | 1週間 | E2Eテスト、負荷テスト(k6)、セキュリティテスト(OWASP ZAP) | テスト報告書、品質保証 |
+| Phase 5: デプロイ | 1週間 | 本番AWS環境構築(Terraform)、監視設定(Prometheus/Grafana)、ドメイン・SSL設定 | 本番稼働環境 |
+| **合計** | **約10週間** | | |
+
+### 5.4 データベース設計（主要テーブル）
+
+```sql
+-- ユーザー
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    name VARCHAR(255),
+    hashed_password VARCHAR(255),
+    oauth_provider VARCHAR(50),
+    oauth_id VARCHAR(255),
+    api_key VARCHAR(64) UNIQUE,
+    plan VARCHAR(20) DEFAULT 'free',  -- free, pro, enterprise
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 判定リクエスト
+CREATE TABLE detection_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id),
+    content_type VARCHAR(20) NOT NULL,  -- text, image, code
+    input_text TEXT,
+    input_file_url VARCHAR(500),
+    language VARCHAR(10),  -- ja, en, etc.
+    status VARCHAR(20) DEFAULT 'pending',  -- pending, processing, completed, failed
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 判定結果
+CREATE TABLE detection_results (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    request_id UUID REFERENCES detection_requests(id),
+    overall_score DECIMAL(5,4),  -- 0.0000 ~ 1.0000
+    label VARCHAR(20),  -- high, medium, low
+    statistical_score DECIMAL(5,4),
+    ml_classifier_score DECIMAL(5,4),
+    watermark_score DECIMAL(5,4),
+    zero_shot_score DECIMAL(5,4),
+    detail_json JSONB,  -- 文単位のスコア、特徴量詳細等
+    model_version VARCHAR(50),
+    processing_time_ms INTEGER,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- フィードバック
+CREATE TABLE feedbacks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    result_id UUID REFERENCES detection_results(id),
+    user_id UUID REFERENCES users(id),
+    is_correct BOOLEAN NOT NULL,
+    actual_label VARCHAR(20),  -- ai_generated, human_written, mixed
+    comment TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+```
 
 ---
 

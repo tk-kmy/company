@@ -448,7 +448,9 @@
     </footer>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+  <!-- anime.js をローカル同梱（CDN不達でも動作）。読めなかった場合のみCDNを試す -->
+  <script src="vendor/anime.min.js"></script>
+  <script>window.anime || document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"><\/script>');</script>
   <script>
   document.addEventListener('DOMContentLoaded', function () {
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;

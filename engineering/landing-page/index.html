@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI鑑定士 — AIが書いた文章、見抜く。</title>
+<meta name="description" content="AI鑑定士 (AI Judge) は、AIが生成したテキストを高精度で見抜く判定サービス。判断に、確信を。" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --navy: #0b1120;
+    --navy-2: #111c33;
+    --navy-3: #1e293b;
+    --blue: #3b82f6;
+    --cyan: #22d3ee;
+    --violet: #8b5cf6;
+    --green: #22c55e;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --white: #f8fafc;
+    --gray-300: #cbd5e1;
+    --gray-500: #94a3b8;
+    --radius: 18px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: "Noto Sans JP", "Inter", system-ui, sans-serif;
+    background: var(--navy);
+    color: var(--white);
+    overflow-x: hidden;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ===== background canvas (particles) ===== */
+  #particles {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  /* cursor glow */
+  #glow {
+    position: fixed;
+    width: 480px;
+    height: 480px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(59,130,246,0.18), rgba(34,211,238,0.06) 40%, transparent 70%);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 1;
+    transition: opacity .4s;
+    will-change: transform;
+  }
+
+  .wrap { position: relative; z-index: 2; }
+
+  /* ===== nav ===== */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px clamp(20px, 5vw, 64px);
+    backdrop-filter: blur(12px);
+    background: rgba(11,17,32,0.55);
+    border-bottom: 1px solid rgba(148,163,184,0.08);
+  }
+  .brand { display: flex; align-items: center; gap: 12px; font-weight: 900; font-size: 19px; letter-spacing: .02em; }
+  .brand .mark {
+    width: 34px; height: 34px; border-radius: 9px;
+    background: linear-gradient(135deg, var(--blue), var(--cyan));
+    display: grid; place-items: center;
+    box-shadow: 0 0 22px rgba(59,130,246,0.6);
+  }
+  .brand .mark svg { width: 20px; height: 20px; }
+  .brand b { color: var(--cyan); }
+  .nav-links { display: flex; gap: 28px; align-items: center; }
+  .nav-links a { color: var(--gray-300); text-decoration: none; font-size: 14px; transition: color .2s; }
+  .nav-links a:hover { color: var(--white); }
+  .nav-cta {
+    background: linear-gradient(135deg, var(--blue), var(--cyan));
+    color: #04101f; font-weight: 700; padding: 9px 18px; border-radius: 999px;
+    font-size: 14px;
+  }
+  @media (max-width: 720px) { .nav-links a:not(.nav-cta) { display: none; } }
+
+  /* ===== hero ===== */
+  header.hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 120px clamp(20px, 5vw, 64px) 60px;
+    position: relative;
+  }
+  .badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    border: 1px solid rgba(34,211,238,0.35);
+    background: rgba(34,211,238,0.07);
+    color: var(--cyan);
+    padding: 7px 16px; border-radius: 999px; font-size: 13px; font-weight: 500;
+    margin-bottom: 30px;
+  }
+  .badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 10px var(--cyan); }
+
+  h1.headline {
+    font-size: clamp(38px, 7vw, 88px);
+    font-weight: 900;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    margin-bottom: 26px;
+  }
+  h1.headline .char { display: inline-block; will-change: transform, opacity; }
+  /* gradient applied per-char so the inline-block split spans keep the clip */
+  h1.headline .accent .char {
+    background: linear-gradient(120deg, var(--cyan), var(--blue), var(--violet));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  /* fallback before JS splits the text */
+  h1.headline .accent {
+    background: linear-gradient(120deg, var(--cyan), var(--blue), var(--violet));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .sub {
+    max-width: 640px;
+    font-size: clamp(15px, 2vw, 19px);
+    color: var(--gray-300);
+    margin-bottom: 40px;
+  }
+  .hero-cta { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+  .btn {
+    font-family: inherit; font-size: 16px; font-weight: 700; cursor: pointer;
+    border: none; border-radius: 999px; padding: 15px 32px; text-decoration: none;
+    display: inline-flex; align-items: center; gap: 10px; transition: transform .2s, box-shadow .3s;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--blue), var(--cyan));
+    color: #04101f;
+    box-shadow: 0 10px 40px rgba(59,130,246,0.45);
+  }
+  .btn-primary:hover { transform: translateY(-3px); box-shadow: 0 14px 50px rgba(34,211,238,0.6); }
+  .btn-ghost { background: rgba(255,255,255,0.05); color: var(--white); border: 1px solid rgba(148,163,184,0.25); }
+  .btn-ghost:hover { background: rgba(255,255,255,0.1); transform: translateY(-3px); }
+
+  .scroll-hint {
+    position: absolute; bottom: 28px; left: 50%; transform: translateX(-50%);
+    color: var(--gray-500); font-size: 12px; display: flex; flex-direction: column; align-items: center; gap: 8px;
+  }
+  .scroll-hint .mouse { width: 22px; height: 36px; border: 2px solid var(--gray-500); border-radius: 12px; position: relative; }
+  .scroll-hint .mouse i { position: absolute; top: 7px; left: 50%; width: 3px; height: 7px; background: var(--gray-500); border-radius: 2px; transform: translateX(-50%); }
+
+  /* ===== section base ===== */
+  section { padding: clamp(70px, 11vw, 130px) clamp(20px, 5vw, 64px); position: relative; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  .eyebrow { color: var(--cyan); font-weight: 700; font-size: 13px; letter-spacing: .18em; text-transform: uppercase; margin-bottom: 14px; }
+  h2.sec-title { font-size: clamp(28px, 4.5vw, 46px); font-weight: 900; line-height: 1.2; margin-bottom: 18px; }
+  .sec-lead { color: var(--gray-300); max-width: 620px; font-size: 16px; }
+
+  .reveal { opacity: 0; }
+
+  /* ===== live scan demo ===== */
+  .demo {
+    margin-top: 54px;
+    display: grid;
+    grid-template-columns: 1.3fr 0.9fr;
+    gap: 30px;
+    align-items: stretch;
+  }
+  @media (max-width: 860px) { .demo { grid-template-columns: 1fr; } }
+
+  .scan-panel, .score-panel {
+    background: linear-gradient(160deg, var(--navy-2), var(--navy));
+    border: 1px solid rgba(148,163,184,0.12);
+    border-radius: var(--radius);
+    padding: 26px;
+    position: relative;
+    overflow: hidden;
+  }
+  .panel-head { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--gray-500); margin-bottom: 18px; font-family: "JetBrains Mono", monospace; }
+  .panel-head .lights { display: flex; gap: 6px; }
+  .panel-head .lights span { width: 11px; height: 11px; border-radius: 50%; }
+  .l-red { background: #ff5f56; } .l-amber { background: #ffbd2e; } .l-green { background: #27c93f; }
+
+  .scan-text { font-size: 15px; line-height: 2; color: var(--gray-300); position: relative; }
+  .scan-text .sent { transition: background .5s, color .5s; border-radius: 4px; padding: 1px 2px; }
+  .scan-text .sent.ai { background: rgba(239,68,68,0.18); color: #fecaca; box-shadow: inset 0 -2px 0 rgba(239,68,68,0.6); }
+  .scan-text .sent.human { background: rgba(34,197,94,0.13); color: #bbf7d0; }
+
+  .scan-line {
+    position: absolute; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+    box-shadow: 0 0 18px 4px rgba(34,211,238,0.55);
+    top: 0; opacity: 0;
+  }
+
+  .score-panel { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  .gauge { position: relative; width: 200px; height: 200px; }
+  .gauge svg { transform: rotate(-90deg); }
+  .gauge .track { fill: none; stroke: rgba(148,163,184,0.15); stroke-width: 14; }
+  .gauge .prog { fill: none; stroke: url(#gaugeGrad); stroke-width: 14; stroke-linecap: round; }
+  .gauge .center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .gauge .pct { font-family: "Inter", sans-serif; font-size: 48px; font-weight: 800; }
+  .gauge .pct small { font-size: 22px; }
+  .gauge .lbl { font-size: 12px; color: var(--gray-500); letter-spacing: .1em; }
+  .verdict { margin-top: 22px; font-weight: 700; font-size: 18px; padding: 8px 20px; border-radius: 999px; }
+  .verdict.ai { background: rgba(239,68,68,0.15); color: #fca5a5; border: 1px solid rgba(239,68,68,0.4); }
+  .replay { margin-top: 18px; background: none; border: 1px solid rgba(148,163,184,0.3); color: var(--gray-300); font-family: inherit; font-size: 13px; padding: 8px 18px; border-radius: 999px; cursor: pointer; transition: all .2s; }
+  .replay:hover { color: var(--white); border-color: var(--cyan); }
+
+  /* ===== stats ===== */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin-top: 10px; }
+  @media (max-width: 720px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+  .stat { text-align: center; padding: 26px 12px; border-radius: var(--radius); background: rgba(255,255,255,0.02); border: 1px solid rgba(148,163,184,0.1); }
+  .stat .num { font-family: "Inter", sans-serif; font-size: clamp(34px, 5vw, 50px); font-weight: 800; background: linear-gradient(120deg, var(--cyan), var(--blue)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .stat .cap { color: var(--gray-500); font-size: 13px; margin-top: 6px; }
+
+  /* ===== features ===== */
+  .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 54px; }
+  @media (max-width: 860px) { .features { grid-template-columns: 1fr; } }
+  .card {
+    background: linear-gradient(160deg, rgba(30,41,59,0.6), rgba(11,17,32,0.4));
+    border: 1px solid rgba(148,163,184,0.12);
+    border-radius: var(--radius);
+    padding: 30px;
+    transition: transform .35s, border-color .35s, box-shadow .35s;
+    will-change: transform;
+  }
+  .card:hover { transform: translateY(-8px); border-color: rgba(34,211,238,0.4); box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
+  .card .ic { width: 52px; height: 52px; border-radius: 13px; display: grid; place-items: center; margin-bottom: 18px; background: rgba(59,130,246,0.15); }
+  .card .ic svg { width: 26px; height: 26px; stroke: var(--cyan); }
+  .card h3 { font-size: 19px; font-weight: 700; margin-bottom: 10px; }
+  .card p { color: var(--gray-300); font-size: 14.5px; }
+
+  /* ===== steps ===== */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 54px; position: relative; }
+  @media (max-width: 860px) { .steps { grid-template-columns: 1fr; } }
+  .step { text-align: center; padding: 20px; }
+  .step .n {
+    width: 64px; height: 64px; margin: 0 auto 18px; border-radius: 50%;
+    display: grid; place-items: center; font-family: "Inter", sans-serif; font-weight: 800; font-size: 24px;
+    background: linear-gradient(135deg, var(--blue), var(--violet)); color: #fff;
+    box-shadow: 0 0 30px rgba(139,92,246,0.5);
+  }
+  .step h3 { font-size: 18px; margin-bottom: 8px; }
+  .step p { color: var(--gray-300); font-size: 14px; }
+
+  /* ===== cta ===== */
+  .cta-box {
+    margin: 0 auto; max-width: 900px; text-align: center;
+    background: linear-gradient(135deg, rgba(59,130,246,0.16), rgba(139,92,246,0.16));
+    border: 1px solid rgba(34,211,238,0.25);
+    border-radius: 28px; padding: clamp(40px, 7vw, 72px);
+    position: relative; overflow: hidden;
+  }
+  .cta-box h2 { font-size: clamp(28px, 4.5vw, 44px); font-weight: 900; margin-bottom: 16px; }
+  .cta-box p { color: var(--gray-300); margin-bottom: 32px; font-size: 16px; }
+
+  footer { padding: 50px clamp(20px, 5vw, 64px); border-top: 1px solid rgba(148,163,184,0.1); color: var(--gray-500); font-size: 13px; text-align: center; }
+  footer .brand { justify-content: center; margin-bottom: 14px; font-size: 16px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1 !important; }
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+  <canvas id="particles"></canvas>
+  <div id="glow"></div>
+
+  <div class="wrap">
+    <nav>
+      <div class="brand">
+        <span class="mark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#04101f" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M5 7h14"/><path d="M5 7l-2.5 6a3 3 0 0 0 5 0L5 7z"/><path d="M19 7l-2.5 6a3 3 0 0 0 5 0L19 7z"/><path d="M8 21h8"/></svg>
+        </span>
+        AI<b>鑑定士</b>
+      </div>
+      <div class="nav-links">
+        <a href="#demo">デモ</a>
+        <a href="#features">特長</a>
+        <a href="#how">使い方</a>
+        <a href="#cta" class="nav-cta">無料で試す</a>
+      </div>
+    </nav>
+
+    <!-- HERO -->
+    <header class="hero">
+      <div class="badge"><span class="dot"></span>日本語特化のAI生成テキスト判定エンジン</div>
+      <h1 class="headline" id="headline">
+        <span class="line" data-text="AIが書いた文章、"></span><br>
+        <span class="line accent" data-text="見抜く。"></span>
+      </h1>
+      <p class="sub reveal" id="hero-sub">
+        パープレキシティ分析・ML分類器・電子透かし検出をアンサンブル。
+        貼り付けるだけで、AI生成の確信度と「なぜそう判定したか」を可視化します。判断に、確信を。
+      </p>
+      <div class="hero-cta reveal" id="hero-cta">
+        <a href="#demo" class="btn btn-primary">スキャンを見る →</a>
+        <a href="#features" class="btn btn-ghost">特長を知る</a>
+      </div>
+      <div class="scroll-hint reveal" id="scroll-hint">
+        <div class="mouse"><i></i></div>
+        SCROLL
+      </div>
+    </header>
+
+    <!-- LIVE DEMO -->
+    <section id="demo">
+      <div class="container">
+        <div class="reveal anim-up"><div class="eyebrow">LIVE SCAN</div>
+        <h2 class="sec-title">スキャンの様子を、その目で。</h2>
+        <p class="sec-lead">文単位でテキストを走査し、AI生成の可能性が高い箇所をリアルタイムにハイライト。総合スコアはゲージで一目瞭然です。</p></div>
+
+        <div class="demo">
+          <div class="scan-panel reveal anim-up">
+            <div class="panel-head"><div class="lights"><span class="l-red"></span><span class="l-amber"></span><span class="l-green"></span></div>&nbsp;input_sample.txt</div>
+            <div class="scan-text" id="scanText">
+              <span class="sent" data-ai="true">本稿では、生成AIの急速な普及が現代社会にもたらす影響について多角的に考察する。</span>
+              <span class="sent" data-ai="true">第一に、業務効率の飛躍的な向上が挙げられ、定型的なタスクの自動化が進展している。</span>
+              <span class="sent" data-ai="false">まあ、正直うちのチームでも最初は半信半疑だったんだけどね。</span>
+              <span class="sent" data-ai="true">一方で、生成物の信頼性や著作権に関する課題も顕在化しており、慎重な対応が求められる。</span>
+              <span class="sent" data-ai="false">結局のところ、使う人間の目利きが一番大事という当たり前の結論に落ち着いた。</span>
+              <span class="sent" data-ai="true">以上の点を踏まえ、適切なガバナンス体制の構築が不可欠であると結論づけられる。</span>
+            </div>
+            <div class="scan-line" id="scanLine"></div>
+          </div>
+
+          <div class="score-panel reveal anim-up">
+            <div class="gauge">
+              <svg width="200" height="200" viewBox="0 0 200 200">
+                <defs>
+                  <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#22d3ee"/>
+                    <stop offset="60%" stop-color="#3b82f6"/>
+                    <stop offset="100%" stop-color="#ef4444"/>
+                  </linearGradient>
+                </defs>
+                <circle class="track" cx="100" cy="100" r="84"/>
+                <circle class="prog" id="gaugeProg" cx="100" cy="100" r="84"/>
+              </svg>
+              <div class="center">
+                <div class="pct"><span id="pctNum">0</span><small>%</small></div>
+                <div class="lbl">AI生成の確信度</div>
+              </div>
+            </div>
+            <div class="verdict ai" id="verdict" style="opacity:0">判定: AI生成の可能性 高</div>
+            <button class="replay" id="replay">↻ もう一度スキャン</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- STATS -->
+    <section style="padding-top:0">
+      <div class="container">
+        <div class="stats">
+          <div class="stat reveal"><div class="num" data-count="98.2" data-suffix="%">0</div><div class="cap">英語テキスト判定F1</div></div>
+          <div class="stat reveal"><div class="num" data-count="0.85" data-decimals="2">0</div><div class="cap">日本語F1スコア目標</div></div>
+          <div class="stat reveal"><div class="num" data-count="3" data-suffix="段階">0</div><div class="cap">段階的スコアリング</div></div>
+          <div class="stat reveal"><div class="num" data-count="100" data-suffix="ms〜">0</div><div class="cap">初回スクリーニング</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FEATURES -->
+    <section id="features">
+      <div class="container">
+        <div class="reveal anim-up"><div class="eyebrow">FEATURES</div>
+        <h2 class="sec-title">単なるスコアでは、終わらせない。</h2>
+        <p class="sec-lead">判定の透明性を最優先。何を根拠に判断したのかを、すべて開示します。</p></div>
+
+        <div class="features">
+          <div class="card reveal anim-up">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg></div>
+            <h3>アンサンブル判定</h3>
+            <p>統計分析・ML分類器(DeBERTa)・電子透かし検出・ゼロショット手法を組み合わせ、単一手法の弱点を補完します。</p>
+          </div>
+          <div class="card reveal anim-up">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></div>
+            <h3>判定根拠の可視化</h3>
+            <p>文単位のAI生成確率をヒートマップ表示。どの特徴量が判定に寄与したかをSHAP値で説明します。</p>
+          </div>
+          <div class="card reveal anim-up">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 6v6c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6l-8-4z"/></svg></div>
+            <h3>日本語に強い</h3>
+            <p>GiNZAによる形態素解析と日本語BERTで、文末表現・助詞分布・漢字比率まで分析。英語中心の既存ツールと一線を画します。</p>
+          </div>
+          <div class="card reveal anim-up">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
+            <h3>段階的レスポンス</h3>
+            <p>統計分析で即時に暫定スコア、ML判定で更新、高精度モデルで確定。待たせず、精度も妥協しません。</p>
+          </div>
+          <div class="card reveal anim-up">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12h8M12 8v8"/></svg></div>
+            <h3>API提供</h3>
+            <p>FastAPIによる自動OpenAPIドキュメント付き。APIキー認証・レート制限で、外部サービスへ簡単に組み込めます。</p>
+          </div>
+          <div class="card reveal anim-up">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7 9 18l-5-5"/></svg></div>
+            <h3>監査可能</h3>
+            <p>すべての判定に履歴とコメントを記録。誤判定フィードバックはActive Learningでモデル改善に還元されます。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- HOW -->
+    <section id="how">
+      <div class="container">
+        <div class="reveal anim-up"><div class="eyebrow">HOW IT WORKS</div>
+        <h2 class="sec-title">3ステップで、鑑定完了。</h2></div>
+        <div class="steps">
+          <div class="step reveal anim-up"><div class="n">1</div><h3>貼り付ける</h3><p>判定したいテキストを入力欄にペースト。日本語・英語に対応します。</p></div>
+          <div class="step reveal anim-up"><div class="n">2</div><h3>スキャン</h3><p>複数の判定エンジンが並行して走査。文単位でAI生成度を解析します。</p></div>
+          <div class="step reveal anim-up"><div class="n">3</div><h3>確信する</h3><p>確信度スコアと根拠を確認。最終判断はあなたの基準で。</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <section id="cta">
+      <div class="cta-box reveal anim-up">
+        <h2>その文章、本当に<br>人間が書きましたか？</h2>
+        <p>AI鑑定士で、いますぐ確かめましょう。クレジットカード不要・無料で開始できます。</p>
+        <a href="#" class="btn btn-primary" id="ctaBtn" style="font-size:18px;padding:17px 40px;">無料でAI鑑定士を始める →</a>
+      </div>
+    </section>
+
+    <footer>
+      <div class="brand">
+        <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#04101f" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M5 7h14"/><path d="M5 7l-2.5 6a3 3 0 0 0 5 0L5 7z"/><path d="M19 7l-2.5 6a3 3 0 0 0 5 0L19 7z"/><path d="M8 21h8"/></svg></span>
+        AI<b>鑑定士</b>
+      </div>
+      <div>判断に、確信を。 &nbsp;•&nbsp; © 2026 株式会社 Company &nbsp;•&nbsp; 開発部プロトタイプ</div>
+    </footer>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+  <script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const hasAnime = typeof anime !== 'undefined';
+
+    /* ---------- split headline into chars ---------- */
+    document.querySelectorAll('#headline .line').forEach(function (line) {
+      const text = line.getAttribute('data-text') || '';
+      line.textContent = '';
+      text.split('').forEach(function (ch) {
+        const s = document.createElement('span');
+        s.className = 'char';
+        s.textContent = ch;
+        s.style.opacity = 0;
+        line.appendChild(s);
+      });
+    });
+
+    /* ---------- gauge + scan setup (declared before any early return) ---------- */
+    const R = 84, CIRC = 2 * Math.PI * R;
+    const prog = document.getElementById('gaugeProg');
+    prog.style.strokeDasharray = CIRC;
+    prog.style.strokeDashoffset = CIRC;
+    const TARGET = 81; // % AI confidence
+
+    function runScan() {
+      const sents = document.querySelectorAll('#scanText .sent');
+      const line = document.getElementById('scanLine');
+      const verdict = document.getElementById('verdict');
+      const pctNum = document.getElementById('pctNum');
+
+      // reset
+      sents.forEach(s => s.classList.remove('ai', 'human'));
+      verdict.style.opacity = 0;
+      pctNum.textContent = '0';
+
+      if (!hasAnime || reduce) {
+        sents.forEach(s => s.classList.add(s.dataset.ai === 'true' ? 'ai' : 'human'));
+        prog.style.strokeDashoffset = CIRC * (1 - TARGET / 100);
+        pctNum.textContent = TARGET; verdict.style.opacity = 1; return;
+      }
+
+      const box = document.getElementById('scanText');
+      const h = box.offsetHeight;
+      line.style.opacity = 1;
+
+      const t = anime.timeline({ easing: 'linear' });
+      // sweep line down
+      t.add({ targets: line, top: [0, h], duration: 1500, easing: 'easeInOutSine' });
+
+      // colour each sentence as the line passes (staggered)
+      sents.forEach((s, i) => {
+        t.add({
+          targets: s, duration: 1,
+          begin: () => s.classList.add(s.dataset.ai === 'true' ? 'ai' : 'human')
+        }, 200 + i * (1500 / sents.length));
+      });
+
+      // fade line out, fill gauge + count up
+      t.add({ targets: line, opacity: 0, duration: 400 }, '+=100');
+      t.add({
+        targets: prog, strokeDashoffset: CIRC * (1 - TARGET / 100),
+        duration: 1400, easing: 'easeOutExpo'
+      }, '-=200');
+      const obj = { v: 0 };
+      t.add({
+        targets: obj, v: TARGET, duration: 1400, easing: 'easeOutExpo',
+        update: () => { pctNum.textContent = Math.round(obj.v); }
+      }, '-=1400');
+      t.add({ targets: verdict, opacity: [0, 1], scale: [0.85, 1], duration: 500, easing: 'easeOutBack' });
+    }
+
+    if (!hasAnime || reduce) {
+      // graceful fallback: just show everything
+      document.querySelectorAll('.char').forEach(c => c.style.opacity = 1);
+      document.querySelectorAll('.reveal').forEach(r => r.style.opacity = 1);
+      runScan(); // still color sentences + set gauge
+      return;
+    }
+
+    /* ---------- hero intro timeline ---------- */
+    const tl = anime.timeline({ easing: 'easeOutExpo' });
+    tl.add({
+      targets: '#headline .char',
+      opacity: [0, 1],
+      translateY: [40, 0],
+      rotateZ: [8, 0],
+      duration: 900,
+      delay: anime.stagger(45),
+    })
+    .add({ targets: '#hero-sub', opacity: [0, 1], translateY: [20, 0], duration: 700 }, '-=500')
+    .add({ targets: '#hero-cta', opacity: [0, 1], translateY: [20, 0], duration: 600 }, '-=450')
+    .add({ targets: '#scroll-hint', opacity: [0, 0.9], duration: 600 }, '-=300');
+
+    // bobbing scroll hint
+    anime({ targets: '.scroll-hint .mouse i', translateY: [0, 10], opacity: [1, 0], easing: 'easeInOutSine', duration: 1300, loop: true });
+
+    /* ---------- cursor glow ---------- */
+    const glow = document.getElementById('glow');
+    if (window.matchMedia('(pointer:fine)').matches) {
+      let gx = innerWidth / 2, gy = innerHeight / 2, cx = gx, cy = gy;
+      addEventListener('mousemove', e => { gx = e.clientX; gy = e.clientY; });
+      (function loop() { cx += (gx - cx) * 0.12; cy += (gy - cy) * 0.12; glow.style.left = cx + 'px'; glow.style.top = cy + 'px'; requestAnimationFrame(loop); })();
+    } else { glow.style.opacity = 0; }
+
+    /* ---------- particle field ---------- */
+    const cv = document.getElementById('particles');
+    const ctx = cv.getContext('2d');
+    let W, H, parts = [];
+    function resize() {
+      W = cv.width = innerWidth; H = cv.height = innerHeight;
+      const count = Math.min(90, Math.floor(W * H / 18000));
+      parts = Array.from({ length: count }, () => ({
+        x: Math.random() * W, y: Math.random() * H,
+        vx: (Math.random() - 0.5) * 0.35, vy: (Math.random() - 0.5) * 0.35,
+        r: Math.random() * 1.8 + 0.6
+      }));
+    }
+    resize(); addEventListener('resize', resize);
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+      for (let i = 0; i < parts.length; i++) {
+        const p = parts[i];
+        p.x += p.vx; p.y += p.vy;
+        if (p.x < 0 || p.x > W) p.vx *= -1;
+        if (p.y < 0 || p.y > H) p.vy *= -1;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(34,211,238,0.55)'; ctx.fill();
+        for (let j = i + 1; j < parts.length; j++) {
+          const q = parts[j], dx = p.x - q.x, dy = p.y - q.y, d = Math.hypot(dx, dy);
+          if (d < 120) {
+            ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y);
+            ctx.strokeStyle = 'rgba(59,130,246,' + (0.14 * (1 - d / 120)) + ')';
+            ctx.lineWidth = 1; ctx.stroke();
+          }
+        }
+      }
+      requestAnimationFrame(draw);
+    }
+    draw();
+
+    /* ---------- scroll reveals ---------- */
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(en => {
+        if (!en.isIntersecting) return;
+        const el = en.target;
+        io.unobserve(el);
+        anime({ targets: el, opacity: [0, 1], translateY: el.classList.contains('anim-up') ? [40, 0] : [14, 0], duration: 800, easing: 'easeOutCubic' });
+        if (el.classList.contains('stats')) {} // handled per-stat below
+        if (el.id === 'demo') {}
+      });
+    }, { threshold: 0.15 });
+
+    // reveal everything except hero items (already animated)
+    document.querySelectorAll('section .reveal').forEach(el => io.observe(el));
+
+    /* ---------- animated number counters ---------- */
+    const statIO = new IntersectionObserver((entries) => {
+      entries.forEach(en => {
+        if (!en.isIntersecting) return;
+        const el = en.target; statIO.unobserve(el);
+        const target = parseFloat(el.dataset.count);
+        const decimals = parseInt(el.dataset.decimals || '0');
+        const suffix = el.dataset.suffix || '';
+        const isInt = decimals === 0 && Number.isInteger(target);
+        const obj = { v: 0 };
+        anime({ targets: obj, v: target, duration: 1600, easing: 'easeOutExpo',
+          update: () => { el.textContent = (isInt ? Math.round(obj.v) : obj.v.toFixed(decimals)) + suffix; } });
+      });
+    }, { threshold: 0.6 });
+    document.querySelectorAll('.num[data-count]').forEach(el => statIO.observe(el));
+
+    // run when demo scrolls into view (once), and on replay
+    const demoIO = new IntersectionObserver((entries) => {
+      entries.forEach(en => { if (en.isIntersecting) { demoIO.disconnect(); setTimeout(runScan, 400); } });
+    }, { threshold: 0.4 });
+    demoIO.observe(document.getElementById('demo'));
+    document.getElementById('replay').addEventListener('click', runScan);
+
+    /* ---------- CTA button pulse ---------- */
+    anime({ targets: '#ctaBtn', boxShadow: [
+      '0 10px 40px rgba(59,130,246,0.45)', '0 10px 55px rgba(34,211,238,0.75)', '0 10px 40px rgba(59,130,246,0.45)'
+    ], duration: 2200, easing: 'easeInOutSine', loop: true });
+
+    /* ---------- feature card tilt on hover ---------- */
+    document.querySelectorAll('.card').forEach(card => {
+      card.addEventListener('mousemove', e => {
+        const r = card.getBoundingClientRect();
+        const px = (e.clientX - r.left) / r.width - 0.5;
+        const py = (e.clientY - r.top) / r.height - 0.5;
+        card.style.transform = `translateY(-8px) rotateX(${-py * 8}deg) rotateY(${px * 8}deg)`;
+      });
+      card.addEventListener('mouseleave', () => { card.style.transform = ''; });
+    });
+  });
+  </script>
+</body>
+</html>
